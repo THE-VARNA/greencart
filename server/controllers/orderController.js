@@ -111,13 +111,21 @@ export const stripeWebhooks = async (request, response) => {
     console.log("[STRIPE WEBHOOK] Received request headers:", request.headers);
 
     try {
+        const secret = process.env.STRIPE_WEBHOOK_SECRET.trim();
         event = stripeInstance.webhooks.constructEvent(
             request.body,
             sig,
-            process.env.STRIPE_WEBHOOK_SECRET
+            secret
         );
     } catch (error) {
         console.error(`[STRIPE WEBHOOK] Signature Verification Failed: ${error.message}`);
+        
+        // Diagnostic check: Stripe signatures require the RAW body. 
+        // If it's an object, some middleware is pre-parsing it.
+        if (typeof request.body !== 'string' && !Buffer.isBuffer(request.body)) {
+            console.error("[STRIPE WEBHOOK] ERROR: Request body is NOT raw (it's likely an object). This will ALWAYS fail signature verification.");
+        }
+        
         return response.status(400).send(`Webhook Error: ${error.message}`);
     }
 
