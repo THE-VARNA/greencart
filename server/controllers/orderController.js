@@ -114,27 +114,15 @@ export const stripeWebhooks = async (request, response) => {
     const sig = request.headers["stripe-signature"];
     let event;
 
-    console.log("[STRIPE WEBHOOK] Received request headers:", request.headers);
-    console.log(`[STRIPE WEBHOOK] Raw Body captured, Length: ${request.rawBody?.length}`);
-
     try {
         const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-        console.log(`[STRIPE WEBHOOK] Using secret prefix: ${secret?.substring(0, 6)}...`);
-
         event = stripeInstance.webhooks.constructEvent(
             request.rawBody,
             sig,
             secret
         );
     } catch (error) {
-        console.error(`[STRIPE WEBHOOK] Signature Verification Failed: ${error.message}`);
-        
-        // Diagnostic check: Stripe signatures require the RAW body. 
-        // If it's an object, some middleware is pre-parsing it.
-        if (typeof request.body !== 'string' && !Buffer.isBuffer(request.body)) {
-            console.error("[STRIPE WEBHOOK] ERROR: Request body is NOT raw (it's likely an object). This will ALWAYS fail signature verification.");
-        }
-        
+        console.error(`Webhook Signature Verification Failed: ${error.message}`);
         return response.status(400).send(`Webhook Error: ${error.message}`);
     }
 
@@ -148,39 +136,24 @@ export const stripeWebhooks = async (request, response) => {
                 const data = event.data.object;
                 const { orderId, userId } = data.metadata;
 
-                if (!orderId || !userId) {
-                    console.log(`[STRIPE WEBHOOK] Info: Event ${event.type} processed but missing orderId/userId metadata.`);
-                    break;
-                }
-
-                console.log(`[STRIPE WEBHOOK] Fulfillment Started - Order: ${orderId}, User: ${userId}`);
-
                 // Mark Payment as Paid
-                const updatedOrder = await Order.findByIdAndUpdate(orderId, { isPaid: true }, { new: true });
-                if (!updatedOrder) {
-                    console.error(`[STRIPE WEBHOOK] Order ${orderId} not found in database!`);
-                }
+                await Order.findByIdAndUpdate(orderId, { isPaid: true });
 
                 // Clear user cart
                 await User.findByIdAndUpdate(userId, { cartItems: {} });
                 
-                console.log(`[STRIPE WEBHOOK] Fulfillment Success - Order ${orderId} is now paid.`);
                 break;
             }
 
             case "payment_intent.payment_failed": {
-                const paymentIntent = event.data.object;
-                console.log(`[STRIPE WEBHOOK] Payment failed for intent: ${paymentIntent.id}`);
                 break;
             }
 
             default:
-                console.log(`[STRIPE WEBHOOK] Unhandled event type: ${event.type}`);
                 break;
         }
     } catch (dbError) {
-        console.error(`[STRIPE WEBHOOK] Database Update failed: ${dbError.message}`);
-        return response.status(500).send("Internal Server Error during fulfillment");
+        return response.status(500).send("Internal Server Error");
     }
 
     response.json({ received: true });
