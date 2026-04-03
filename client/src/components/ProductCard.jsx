@@ -24,6 +24,7 @@ const ProductCard = ({ product }) => {
             className="group-hover:scale-105 transition max-w-26 md:max-w-36"
             src={product.image[0]}
             alt={product.name}
+            crossOrigin="anonymous"
           />
         </div>
 

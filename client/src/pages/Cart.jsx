@@ -110,7 +110,7 @@ const Cart = () => {
                             <div onClick={()=>{
                                 navigate(`/products/${product.category.toLowerCase()}/${product._id}`); scrollTo(0,0)
                             }} className="cursor-pointer w-24 h-24 flex items-center justify-center border border-gray-300 rounded">
-                                <img className="max-w-full h-full object-cover" src={product.image[0]} alt={product.name} />
+                                <img className="max-w-full h-full object-cover" src={product.image[0]} alt={product.name} crossOrigin="anonymous" />
                             </div>
                             <div>
                                 <p className="hidden md:block font-semibold">{product.name}</p>
