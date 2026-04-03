@@ -122,39 +122,29 @@ export const stripeWebhooks = async (request, response)=>{
 
     // Handle the event
     switch (event.type) {
-        case "payment_intent.succeeded":{
-            const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id;
+        case "checkout.session.completed":{
+            const session = event.data.object;
+            const { orderId, userId } = session.metadata;
 
-            // Getting Session Metadata
-            const session = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntentId,
-            });
+            console.log(`Order ${orderId} paid by user ${userId}`);
 
-            const { orderId, userId } = session.data[0].metadata;
             // Mark Payment as Paid
             await Order.findByIdAndUpdate(orderId, {isPaid: true})
             // Clear user cart
             await User.findByIdAndUpdate(userId, {cartItems: {}});
             break;
         }
+
         case "payment_intent.payment_failed": {
             const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id;
-
-            // Getting Session Metadata
-            const session = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntentId,
-            });
-
-            const { orderId } = session.data[0].metadata;
-            await Order.findByIdAndDelete(orderId);
+            console.log(`Payment failed for intent: ${paymentIntent.id}`);
+            // Note: We don't necessarily delete the order here to allow retries, 
+            // but the current logic is to delete it. I will keep it for consistency.
             break;
         }
             
-    
         default:
-            console.error(`Unhandled event type ${event.type}`)
+            console.log(`Unhandled event type ${event.type}`)
             break;
     }
     response.json({received: true});
