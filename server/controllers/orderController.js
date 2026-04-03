@@ -103,12 +103,12 @@ export const placeOrderStripe = async (req, res)=>{
     }
 }
 // Stripe Webhooks to Verify Payments Action : /stripe
-export const stripeWebhooks = async (request, response)=>{
-    // Stripe Gateway Initialize
+export const stripeWebhooks = async (request, response) => {
     const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY);
-
     const sig = request.headers["stripe-signature"];
     let event;
+
+    console.log("[STRIPE WEBHOOK] Received request headers:", request.headers);
 
     try {
         event = stripeInstance.webhooks.constructEvent(
@@ -117,37 +117,55 @@ export const stripeWebhooks = async (request, response)=>{
             process.env.STRIPE_WEBHOOK_SECRET
         );
     } catch (error) {
-        response.status(400).send(`Webhook Error: ${error.message}`)
+        console.error(`[STRIPE WEBHOOK] Signature Verification Failed: ${error.message}`);
+        return response.status(400).send(`Webhook Error: ${error.message}`);
     }
+
+    console.log(`[STRIPE WEBHOOK] Verified Event Type: ${event.type}`);
 
     // Handle the event
-    switch (event.type) {
-        case "checkout.session.completed":{
-            const session = event.data.object;
-            const { orderId, userId } = session.metadata;
+    try {
+        switch (event.type) {
+            case "checkout.session.completed": {
+                const session = event.data.object;
+                const { orderId, userId } = session.metadata;
 
-            console.log(`Order ${orderId} paid by user ${userId}`);
+                if (!orderId || !userId) {
+                    console.error("[STRIPE WEBHOOK] Missing metadata in session:", session.metadata);
+                    return response.status(400).send("Missing metadata");
+                }
 
-            // Mark Payment as Paid
-            await Order.findByIdAndUpdate(orderId, {isPaid: true})
-            // Clear user cart
-            await User.findByIdAndUpdate(userId, {cartItems: {}});
-            break;
+                console.log(`[STRIPE WEBHOOK] Fulfillment Started - Order: ${orderId}, User: ${userId}`);
+
+                // Mark Payment as Paid
+                const updatedOrder = await Order.findByIdAndUpdate(orderId, { isPaid: true }, { new: true });
+                if (!updatedOrder) {
+                    console.error(`[STRIPE WEBHOOK] Order ${orderId} not found in database!`);
+                }
+
+                // Clear user cart
+                await User.findByIdAndUpdate(userId, { cartItems: {} });
+                
+                console.log(`[STRIPE WEBHOOK] Fulfillment Success - Order ${orderId} is now paid.`);
+                break;
+            }
+
+            case "payment_intent.payment_failed": {
+                const paymentIntent = event.data.object;
+                console.log(`[STRIPE WEBHOOK] Payment failed for intent: ${paymentIntent.id}`);
+                break;
+            }
+
+            default:
+                console.log(`[STRIPE WEBHOOK] Unhandled event type: ${event.type}`);
+                break;
         }
-
-        case "payment_intent.payment_failed": {
-            const paymentIntent = event.data.object;
-            console.log(`Payment failed for intent: ${paymentIntent.id}`);
-            // Note: We don't necessarily delete the order here to allow retries, 
-            // but the current logic is to delete it. I will keep it for consistency.
-            break;
-        }
-            
-        default:
-            console.log(`Unhandled event type ${event.type}`)
-            break;
+    } catch (dbError) {
+        console.error(`[STRIPE WEBHOOK] Database Update failed: ${dbError.message}`);
+        return response.status(500).send("Internal Server Error during fulfillment");
     }
-    response.json({received: true});
+
+    response.json({ received: true });
 }
 
 
