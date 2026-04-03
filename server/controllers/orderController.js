@@ -109,12 +109,14 @@ export const stripeWebhooks = async (request, response) => {
     let event;
 
     console.log("[STRIPE WEBHOOK] Received request headers:", request.headers);
-    console.log(`[STRIPE WEBHOOK] Body Type: ${typeof request.body}, Length: ${request.body?.length}`);
+    console.log(`[STRIPE WEBHOOK] Raw Body captured, Length: ${request.rawBody?.length}`);
 
     try {
-        const secret = process.env.STRIPE_WEBHOOK_SECRET.trim();
+        const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+        console.log(`[STRIPE WEBHOOK] Using secret prefix: ${secret?.substring(0, 6)}...`);
+
         event = stripeInstance.webhooks.constructEvent(
-            request.body,
+            request.rawBody,
             sig,
             secret
         );
