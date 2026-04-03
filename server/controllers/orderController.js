@@ -94,6 +94,12 @@ export const placeOrderStripe = async (req, res)=>{
         metadata: {
             orderId: order._id.toString(),
             userId,
+        },
+        payment_intent_data: {
+           metadata: {
+               orderId: order._id.toString(),
+               userId,
+           }
         }
      })
 
@@ -137,13 +143,14 @@ export const stripeWebhooks = async (request, response) => {
     // Handle the event
     try {
         switch (event.type) {
-            case "checkout.session.completed": {
-                const session = event.data.object;
-                const { orderId, userId } = session.metadata;
+            case "checkout.session.completed":
+            case "payment_intent.succeeded": {
+                const data = event.data.object;
+                const { orderId, userId } = data.metadata;
 
                 if (!orderId || !userId) {
-                    console.error("[STRIPE WEBHOOK] Missing metadata in session:", session.metadata);
-                    return response.status(400).send("Missing metadata");
+                    console.log(`[STRIPE WEBHOOK] Info: Event ${event.type} processed but missing orderId/userId metadata.`);
+                    break;
                 }
 
                 console.log(`[STRIPE WEBHOOK] Fulfillment Started - Order: ${orderId}, User: ${userId}`);
