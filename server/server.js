@@ -21,20 +21,8 @@ await connectCloudinary()
 // Allow multiple origins
 const allowedOrigins = ['http://localhost:5173', 'https://greencart-iota-two.vercel.app']
 
-// Custom middleware to capture raw body for Stripe Webhooks (Required for Vercel)
-app.use('/stripe', (req, res, next) => {
-    let data = '';
-    req.setEncoding('utf8');
-    req.on('data', (chunk) => {
-        data += chunk;
-    });
-    req.on('end', () => {
-        req.rawBody = data;
-        next();
-    });
-});
+app.post('/stripe', express.raw({type: 'application/json'}), stripeWebhooks)
 
-app.post('/stripe', stripeWebhooks)
 
 // Middleware configuration
 app.use(express.json());
